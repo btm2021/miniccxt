@@ -5,10 +5,9 @@ import { Normalizer } from '../../core/Normalizer';
 
 export class OKX extends BaseExchange {
     async fetchOHLCV(symbol: string, timeframe: string, params: any = {}): Promise<OHLCV[]> {
-        const marketSymbol = this.normalizeSymbol(symbol).replace('/', '-');
+        const marketSymbol = this.normalizeSymbol(symbol);
         const interval = this.normalizeTimeframe(timeframe);
         const maxLimit = 100; // OKX limit per request
-
         let requestedLimit = params.limit || 100;
         let limitRemaining = requestedLimit;
         let allCandles: OHLCV[] = [];
@@ -48,19 +47,63 @@ export class OKX extends BaseExchange {
 
     async fetchExchangeInfo(): Promise<ExchangeInfo> {
         const response = await this.restClient.get<any>('/api/v5/public/instruments', {
-            instType: 'SWAP' // Perpetual
+            instType: 'SWAP'
         });
+
+        // CHỈ LẤY các cặp thanh toán bằng USDT (Settle Currency là USDT)
+        // Điều này đảm bảo giống hệt với Binance USDⓂ-Margined
+        const filteredSymbols = response.data.filter((s: any) =>
+            s.settleCcy === 'USDT' && s.state === 'live'
+        );
+
+        const markets = filteredSymbols.map((s: any) => {
+            // OKX instId: "BTC-USDT-SWAP" -> Lấy "BTC/USDT"
+            const parts = s.instId.split('-');
+            const base = parts[0];
+            const quote = parts[1];
+            const std = this.standardizeSymbol(`${base}/${quote}`);
+            this.rawToStandard.set(s.instId, std);
+            this.standardToRaw.set(std, s.instId);
+
+            const { minMove, priceScale } = this.calculateTVPrecision(s.tickSz);
+
+            return {
+                symbol: std,
+                id: s.instId,
+                base: base,
+                quote: quote,
+                active: s.state === 'live',
+                precision: {
+                    price: parseFloat(s.tickSz),
+                    amount: parseFloat(s.lotSz)
+                },
+                limits: {
+                    amount: {
+                        min: parseFloat(s.minSz),
+                        max: 0
+                    },
+                    price: { min: 0, max: 0 },
+                    cost: { min: 0, max: 0 }
+                },
+                minMove,
+                priceScale,
+                info: s
+            };
+        });
+
+        this.setMarkets(markets);
+
         return {
             id: this.config.id,
             name: this.config.name,
-            symbols: response.data.map((s: any) => s.instId),
+            symbols: markets.map((m: any) => m.symbol),
             timeframes: Object.keys(this.config.timeframeMap),
-            markets: response.data
+            markets
         };
     }
 
     async fetchTicker(symbol: string, params?: object): Promise<Ticker> {
-        const marketSymbol = this.normalizeSymbol(symbol).replace('/', '-');
+        const marketSymbol = this.normalizeSymbol(symbol);
         const response = await this.restClient.get<any>('/api/v5/market/ticker', {
             instId: marketSymbol,
             ...params
@@ -107,7 +150,7 @@ export class OKX extends BaseExchange {
         for (let i = 0; i < instIds.length; i += 20) {
             const batch = instIds.slice(i, i + 20).map(id => ({
                 channel: 'tickers',
-                instId: id
+                instId: this.normalizeSymbol(id)
             }));
 
             this.wsClient.send({
@@ -121,7 +164,7 @@ export class OKX extends BaseExchange {
                 msg.data.forEach((t: any) => {
                     callback({
                         exchange: 'OKX_FUTURE',
-                        symbol: t.instId,
+                        symbol: this.rawToStandard.get(t.instId) || this.standardizeSymbol(t.instId),
                         type: 'ticker',
                         timestamp: this.normalizeTimestamp(parseInt(t.ts)),
                         data: t
@@ -143,7 +186,7 @@ export class OKX extends BaseExchange {
                 msg.data.forEach((t: any) => {
                     callback({
                         exchange: 'OKX_FUTURE',
-                        symbol,
+                        symbol: this.rawToStandard.get(t.instId) || this.standardizeSymbol(symbol),
                         type: 'ticker',
                         timestamp: this.normalizeTimestamp(parseInt(t.ts)),
                         data: t

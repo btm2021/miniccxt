@@ -1,126 +1,91 @@
 # Mini-CCXT Project
 
-**Mini-CCXT** là một thư viện Unified Market Data siêu nhẹ, được thiết kế để hợp nhất các API REST và WebSocket từ nhiều sàn giao dịch khác nhau (Crypto & Forex) thành một chuẩn duy nhất. Thư viện hỗ trợ cả môi trường **Node.js** và **Browser**.
+**Mini-CCXT** là một thư viện Unified Market Data siêu nhẹ (Lite), được thiết kế để hợp nhất các API REST và WebSocket từ nhiều sàn giao dịch khác nhau (Crypto & Forex) thành một chuẩn duy nhất. Thư viện hỗ trợ cả môi trường **Node.js** và **Browser**.
 
-🎯 **Mục tiêu**: Tập trung vào Market Data (OHLCV, Ticker) với khả năng "Smart Fetch" (tự động phân trang khi yêu cầu dữ liệu lịch sử lớn).
+🎯 **Mục tiêu**: Tập trung vào Market Data (OHLCV, Ticker, ExchangeInfo) với khả năng "Smart Fetch" (tự động phân trang khi yêu cầu dữ liệu lịch sử lớn) và đồng bộ hóa đa sàn.
 
 ---
 
 ## 🚀 Tính năng chính
 
-- **Unified API**: Sử dụng chung một bộ hàm cho mọi sàn (`fetchOHLCV`, `fetchTicker`, `subscribeAllMiniTickers`).
+- **Unified API**: Sử dụng chung một bộ hàm cho mọi sàn (`fetchOHLCV`, `fetchTicker`, `fetchExchangeInfo`, `subscribeTicker`).
+- **Standardized Symbols**: Ký hiệu thống nhất dưới dạng `EXCHANGE:BASE/QUOTE` (ví dụ: `BINANCE:BTC/USDT`, `OANDA:XAU/USD`).
 - **Smart Fetch**: Tự động chia nhỏ và gọi API nhiều lần khi `limit` vượt quá giới hạn của sàn (ví dụ: lấy 5000 nến Binance trong 1 lần gọi).
-- **Hybrid WebSocket**: Hệ thống tự động nhận diện môi trường để sử dụng `ws` (Node.js) hoặc `native WebSocket` (Browser).
-- **Timezone Standard**: Mọi timestamp trả về đều được chuẩn hóa (ví dụ: hỗ trợ UTC+7 như cấu hình).
-- **Exchange Support**:
-  - **Binance Future** (USD-M)
-  - **Bybit Future** (Perpetual Linear)
-  - **OKX Future** (Swap)
-  - **OANDA** (Forex - REST & Polling fallback)
+- **Forex Gap Filling**: Algorith tự động chèn "nến phẳng" (flat bars) vào các khoảng nghỉ của thị trường Forex (cuối tuần, lễ) giúp biểu đồ không bị đứt đoạn.
+- **Hybrid Streaming**: 
+  - Crypto: Sử dụng native WebSocket.
+  - Forex (OANDA): Sử dụng HTTP Streaming (ReadableStream) để nhận giá trực tiếp không cần WebSocket.
+- **TradingView Compatible**: Cung cấp sẵn các thuộc tính `minMove`, `priceScale`, `precision` để tích hợp trực tiếp vào TradingView Chart.
 
 ---
 
-## 🏗️ Kiến trúc Chi tiết
+## 🏗️ Cấu trúc dự án
 
-Dự án được xây dựng theo mô hình **Inheritance & Manager**:
-
-- `core/BaseExchange.ts`: Lớp trừu tượng định nghĩa các quy chuẩn chung.
-- `core/RestClient.ts` & `WebSocketClient.ts`: Các driver kết nối nền tảng.
-- `core/Normalizer.ts`: Tập hợp các hàm biến đổi dữ liệu thô từ sàn về định dạng chuẩn của dự án.
-- `exchanges/`: Thư mục chứa các bản triển khai thực tế của từng sàn (Binance, Bybit, OKX...).
-
-### Định dạng dữ liệu chuẩn
-```typescript
-interface OHLCV {
-  timestamp: number; // Đã chuẩn hóa
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
-
-interface UnifiedMessage {
-  exchange: 'BINANCE_FUTURE' | 'BYBIT_FUTURE' | 'OKX_FUTURE' | string;
-  symbol: string;
-  type: 'ticker' | 'ohlcv';
-  data: any; // Raw data hoặc chuẩn hóa sâu hơn
-}
+```text
+src/
+├── core/               # Nhân lõi (Base classes, Drivers)
+│   ├── BaseExchange.ts # Lớp cơ sở cho mọi sàn
+│   ├── RestClient.ts   # Axios wrapper
+│   └── WebSocketClient.ts # WebSocket wrapper (Node/Browser)
+├── exchanges/          # Triển khai cụ thể từng sàn
+│   ├── crypto/         # Binance, Bybit, OKX
+│   └── forex/          # Oanda
+├── types/              # Định nghĩa TypeScript (Market, Exchange, WS)
+├── utils/              # Tiện ích (Symbol handling, Timezone UTC+7)
+└── index.ts            # Entry point (MiniCCXT class & Configs)
 ```
 
 ---
 
-## 🛠️ Hướng dẫn Triển khai (Implement)
+## 🛠️ Hướng dẫn sử dụng
 
-### 1. Cài đặt môi trường
+### 1. Cài đặt và Build
 ```bash
 npm install
+npm run bundle  # Tạo file bundle tại dist/mini-ccxt.js
 ```
 
-### 2. Thêm một sàn mới (DataSource)
-Để thêm một sàn mới, bạn tạo một file trong `src/exchanges/` và kế thừa `BaseExchange`:
+### 2. Sử dụng trong Browser
+Nhúng file `dist/mini-ccxt.js` và khởi tạo:
+```javascript
+const ccxt = new MiniCCXT.MiniCCXT();
 
-```typescript
-import { BaseExchange } from '../../core/BaseExchange';
+// Thêm sàn (sử dụng ID trong DEFAULT_CONFIGS)
+const binance = await ccxt.addExchange('BINANCE_FUTURE');
+const oanda = await ccxt.addExchange('OANDA', { accountId: '...', apiKey: '...' });
 
-export class MyNewExchange extends BaseExchange {
-  async fetchOHLCV(symbol: string, timeframe: string, params: any = {}) {
-    // 1. Gọi API sàn sử dụng this.restClient
-    // 2. Sử dụng logic vòng lặp nếu muốn hỗ trợ Smart Fetch
-    // 3. Trả về dữ liệu qua Normalizer.normalizeOHLCV
-  }
-  
-  // Triển khai tương tự cho fetchTicker và WebSocket subscriptions
-}
-```
-Sau đó đăng ký class này trong `src/index.ts`.
+// Lấy 2000 nến (Smart Fetch tự động chạy)
+const bars = await ccxt.fetchOHLCV('BINANCE_FUTURE', 'BTC/USDT', '1h', { limit: 2000 });
 
-### 3. Đóng gói cho Browser
-Sử dụng `esbuild` để tạo file bundle sử dụng ngay lập tức:
-```bash
-npm run bundle
-```
-File kết quả sẽ nằm tại `dist/mini-ccxt.js`. Bạn có thể nhúng trực tiếp vào thẻ `<script>`.
-
----
-
-## 🧪 Ví dụ sử dụng
-
-### Node.js (TypeScript)
-```typescript
-import { MiniCCXT } from './src/index';
-
-const ccxt = new MiniCCXT();
-ccxt.addExchange({
-    id: 'binance',
-    name: 'Binance Future',
-    type: 'crypto',
-    restUrl: 'https://fapi.binance.com',
-    wsUrl: 'wss://fstream.binance.com/ws',
-    timeframeMap: { '1h': '1h' }
-});
-
-// Smart Fetch 2000 nến
-const ohlcv = await ccxt.fetchOHLCV('binance', 'BTC/USDT', '1h', { limit: 2000 });
+// Lấy thông tin cấu hình chart (cho TradingView)
+const info = binance.getInfoSymbol('BTC/USDT'); 
+// Trả về { minMove, priceScale, precision ... }
 ```
 
-### WebSocket All Tickers (Realtime)
-```typescript
-ccxt.subscribeAllMiniTickers('bybit', (msg) => {
-    console.log(`[${msg.exchange}] ${msg.symbol}: ${msg.data.lastPrice}`);
+### 3. Đăng ký nhận giá Realtime
+```javascript
+ccxt.subscribeTicker('OANDA', 'XAU/USD', (msg) => {
+    console.log(`[OANDA] Gold Price: ${msg.data.last}`);
 });
 ```
 
 ---
 
-## 📂 Cấu trúc thư mục
-- `src/core/`: Nhân lõi của thư viện.
-- `src/exchanges/`: Các bản thực thi sàn giao dịch.
-- `src/utils/`: Các hàm tiện ích về thời gian, ký hiệu.
-- `dist/`: Chứa file bundle cho trình duyệt.
-- `examples/`: Các ví dụ mẫu và file test.
+## 🧪 Dashboard Demo
+Dự án đi kèm một trang Dashboard mẫu tại `examples/dashboard/index.html`. 
+Để chạy demo:
+1. Chạy lệnh: `npx http-server .`
+2. Mở trình duyệt tại: `http://localhost:8080/examples/dashboard/`
+
+---
+
+## 📂 Danh sách sàn đang hỗ trợ
+- **BINANCE_FUTURE**: Crypto Futures (USD-M).
+- **BYBIT_FUTURE**: Crypto Futures (Linear).
+- **OKX_FUTURE**: Crypto Futures (Swap).
+- **OANDA**: Forex (Major pairs & Gold).
 
 ---
 
 ## 📝 Giấy phép
-Dự án được phát triển cho mục đích nghiên cứu và giao dịch tự động. Vui lòng kiểm tra kỹ logic tính toán trước khi áp dụng vào thực tế.
+Dự án được phát triển cho mục đích nghiên cứu và giao dịch tự động. Vui lòng kiểm tra kỹ logic tính toán (đặc biệt là Gap Filling và Timezone) trước khi áp dụng vào thực tế.

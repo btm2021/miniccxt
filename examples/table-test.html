@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Mini-CCXT Table Test</title>
+</head>
+
+<body>
+    <h1>Mini-CCXT Live Prices</h1>
+    <table border="1" id="price-table">
+        <thead>
+            <tr>
+                <th>Exchange</th>
+                <th>Symbol</th>
+                <th>Price</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr id="row-binance">
+                <td>Binance Futures</td>
+                <td>BTC/USDT</td>
+                <td class="price">-</td>
+                <td class="status">Connecting...</td>
+            </tr>
+            <tr id="row-bybit">
+                <td>Bybit</td>
+                <td>BTC/USDT</td>
+                <td class="price">-</td>
+                <td class="status">Connecting...</td>
+            </tr>
+            <tr id="row-okx">
+                <td>OKX</td>
+                <td>BTC/USDT</td>
+                <td class="price">-</td>
+                <td class="status">Connecting...</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <script src="../dist/mini-ccxt.js"></script>
+    <script>
+        const ccxt = new MiniCCXT.MiniCCXT();
+
+        function updateRow(exchangeId, price, status) {
+            const row = document.getElementById(`row-${exchangeId}`);
+            if (price) row.querySelector('.price').innerText = price;
+            if (status) row.querySelector('.status').innerText = status;
+        }
+
+        async function init() {
+            // 1. Setup Binance
+            ccxt.addExchange({
+                id: 'binance',
+                name: 'Binance',
+                type: 'crypto',
+                restUrl: 'https://fapi.binance.com',
+                wsUrl: 'wss://fstream.binance.com/ws',
+                capabilities: { websocket: { ticker: true } }
+            });
+
+            // 2. Setup Bybit
+            ccxt.addExchange({
+                id: 'bybit',
+                name: 'Bybit',
+                type: 'crypto',
+                restUrl: 'https://api.bybit.com',
+                wsUrl: 'wss://stream.bybit.com/v5/public/linear',
+                capabilities: { websocket: { ticker: true } }
+            });
+
+            // 3. Setup OKX
+            ccxt.addExchange({
+                id: 'okx',
+                name: 'OKX',
+                type: 'crypto',
+                restUrl: 'https://www.okx.com',
+                wsUrl: 'wss://ws.okx.com:8443/ws/v5/public',
+                capabilities: { websocket: { ticker: true } }
+            });
+
+            const exchanges = ['binance', 'bybit', 'okx'];
+
+            for (const id of exchanges) {
+                try {
+                    const ex = ccxt.getExchange(id);
+                    await ex.wsClient.connect();
+                    updateRow(id, null, 'Connected');
+
+                    ccxt.subscribeTicker(id, 'BTC/USDT', (msg) => {
+                        // Cập nhật giá từ bản tin ticker
+                        // Format data tùy thuộc vào implement của từng exchange trong src/
+                        if (msg.data && msg.data.c) { // Binance format chung trong mini-ccxt
+                            updateRow(id, msg.data.c, 'Live');
+                        } else if (msg.data && msg.data.last) {
+                            updateRow(id, msg.data.last, 'Live');
+                        } else {
+                            // Fallback hiển thị raw data nếu cần debug
+                            updateRow(id, JSON.stringify(msg.data), 'Live');
+                        }
+                    });
+                } catch (e) {
+                    updateRow(id, 'Error', e.message);
+                }
+            }
+        }
+
+        init();
+    </script>
+</body>
+
+</html>

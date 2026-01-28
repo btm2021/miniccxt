@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiniCCXT Data Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <header>
+        <h1>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+                <polyline points="16 7 22 7 22 13"></polyline>
+            </svg>
+            MiniCCXT <span>Dashboard</span>
+        </h1>
+        <div class="status-badge" id="global-status">
+            <div class="status-dot"></div>
+            <span>System Operational</span>
+        </div>
+    </header>
+
+    <main id="exchange-grid">
+        <!-- Exchange cards will be injected here -->
+    </main>
+
+    <script src="../../dist/mini-ccxt.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

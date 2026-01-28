@@ -25,10 +25,31 @@ export interface Ticker {
     average: number | null;
 }
 
+export interface Market {
+    symbol: string;         // Standardized symbol e.g., BTC/USDT
+    id: string;             // Raw exchange ID e.g., BTCUSDT
+    base: string;
+    quote: string;
+    settle?: string;
+    active: boolean;
+    precision: {
+        price: number;
+        amount: number;
+    };
+    limits: {
+        amount: { min: number; max: number };
+        price: { min: number; max: number };
+        cost: { min: number; max: number };
+    };
+    info: any;              // Raw data
+    minMove: number;        // small price change (tick size)
+    priceScale: number;     // 10^precision
+}
+
 export interface ExchangeInfo {
     id: string;
     name: string;
     symbols: string[];
     timeframes: string[];
-    markets: any[];
+    markets: Market[];
 }

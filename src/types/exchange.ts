@@ -1,6 +1,8 @@
 export interface ExchangeConfig {
     id: string;                    // 'binance', 'oanda'
     name: string;                  // 'Binance', 'OANDA'
+    shortName: string;             // 'BNB', 'BYB'
+    description: string;           // Brief description
     type: 'crypto' | 'forex';
     logo: string;                  // SVG string hoặc URL
 
