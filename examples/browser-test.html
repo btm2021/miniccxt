@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini-CCXT Browser Test</title>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: #eee; padding: 20px; }
+        #log { background: #000; padding: 10px; border-radius: 5px; height: 400px; overflow-y: auto; font-family: monospace; }
+        .success { color: #4caf50; }
+        .info { color: #2196f3; }
+        .error { color: #f44336; }
+    </style>
+</head>
+<body>
+    <h1>Mini-CCXT Browser Live Test</h1>
+    <div id="log"></div>
+
+    <!-- Include the bundled library -->
+    <script src="../dist/mini-ccxt.js"></script>
+
+    <script>
+        const log = (msg, type = 'info') => {
+            const div = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = type;
+            entry.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            div.appendChild(entry);
+            div.scrollTop = div.scrollHeight;
+        };
+
+        async function start() {
+            log('Initializing MiniCCXT...', 'info');
+            
+            // MiniCCXT is available via global name from esbuild
+            // Note: Since we used --global-name=MiniCCXT, and it's an exported class in index.ts
+            // we might need to use MiniCCXT.MiniCCXT if it was exported like that.
+            // Let's check the bundle structure. Usually for classes it's MiniCCXT.MiniCCXT
+            
+            let ccxt;
+            try {
+                ccxt = new MiniCCXT.MiniCCXT();
+                log('MiniCCXT Initialized.', 'success');
+            } catch (e) {
+                log('Failed to initialize: ' + e.message, 'error');
+                return;
+            }
+
+            // Setup Binance Futures
+            ccxt.addExchange({
+                id: 'binance',
+                name: 'Binance Futures',
+                type: 'crypto',
+                restUrl: 'https://fapi.binance.com',
+                wsUrl: 'wss://fstream.binance.com/ws',
+                logo: '',
+                capabilities: {
+                    rest: { fetchOHLCV: true, fetchTickers: true, fetchExchangeInfo: true },
+                    websocket: { ticker: true, ohlcv: true, allMiniTickers: true }
+                },
+                timeframeMap: { '1m': '1m', '1h': '1h' }
+            });
+
+            log('Fetching REST Ticker for BTC/USDT...', 'info');
+            try {
+                const ticker = await ccxt.fetchTicker('binance', 'BTC/USDT');
+                log(`REST Ticker Price: ${ticker.last}`, 'success');
+            } catch (e) {
+                log('REST Error: ' + e.message, 'error');
+            }
+
+            log('Connecting WebSocket...', 'info');
+            const binance = ccxt.getExchange('binance');
+            const ws = binance.wsClient;
+
+            if (ws) {
+                await ws.connect();
+                log('WebSocket Connected.', 'success');
+
+                ccxt.subscribeAllMiniTickers('binance', (msg) => {
+                    log(`[WS] ${msg.exchange}:${msg.symbol} -> ${msg.data.c}`, 'info');
+                });
+
+                ws.send({
+                    method: "SUBSCRIBE",
+                    params: ["!ticker@arr"],
+                    id: 1
+                });
+            }
+        }
+
+        start();
+    </script>
+</body>
+</html>
