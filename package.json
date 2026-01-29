@@ -1,23 +1,44 @@
 {
-  "name": "miniccxt",
-  "version": "1.0.0",
-  "main": "index.js",
+  "name": "miniccxt-lite",
+  "version": "1.0.3",
+  "description": "Mini Unified Market Data library for Crypto and Forex",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "browser": "./dist/mini-ccxt.js",
+  "jsdelivr": "./dist/mini-ccxt.js",
+  "unpkg": "./dist/mini-ccxt.js",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "bundle": "esbuild src/index.ts --bundle --outfile=dist/mini-ccxt.js --format=iife --global-name=MiniCCXT --platform=browser --external:ws",
-    "build": "tsc"
+    "build:cjs": "esbuild src/index.ts --bundle --outfile=dist/index.cjs --format=cjs --platform=node --external:axios --external:ws",
+    "build:esm": "esbuild src/index.ts --bundle --outfile=dist/index.mjs --format=esm --platform=neutral --external:axios --external:ws",
+    "build:types": "tsc --emitDeclarationOnly",
+    "build": "npm run build:cjs && npm run build:esm && npm run build:types && npm run bundle",
+    "prepublishOnly": "npm run build"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "keywords": [
+    "crypto",
+    "forex",
+    "ccxt",
+    "market-data",
+    "ohlcv",
+    "tradingview"
+  ],
+  "author": "baotm",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.13.4",
+    "ws": "^8.19.0"
+  },
   "devDependencies": {
     "@types/node": "^25.0.10",
     "@types/ws": "^8.18.1",
-    "axios": "^1.13.4",
     "esbuild": "^0.27.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3",
-    "ws": "^8.19.0"
+    "typescript": "^5.9.3"
   }
 }
